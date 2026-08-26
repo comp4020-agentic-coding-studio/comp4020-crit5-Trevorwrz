@@ -53,6 +53,22 @@ in from anywhere else.
    by approaching the same enemy from the side the old code would have gotten
    wrong.
 
+4. **A manual Attack/Flee panel was a second interface bolted onto the first.**
+   Actually playing the room end to end (not just reasoning about the state
+   machine) surfaced something the tests couldn't: bumping an enemy opened a
+   battle panel with its own buttons, so every single fight meant leaving the
+   keyboard, clicking Attack with the mouse, then clicking back into the stage
+   to keep moving with WASD/arrows. That's exactly the kind of friction the
+   brief's "no tutorial, learn it by playing" bar is meant to rule out. The fix
+   in
+   [`ef8e770`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-Trevorwrz/commit/ef8e770)
+   makes `move()` resolve the whole fight synchronously the instant you step
+   into an enemy's tile --- closer to the instant wall-bump combat of games
+   like Magic Tower --- so the player never leaves the keyboard. Flee no
+   longer has a decision point to hang off once combat is instantaneous, so it
+   was removed rather than left as dead code the tests couldn't reach anymore;
+   the on-screen log line takes over telling the player what just happened.
+
 ## What I haven't verified myself
 
 The brief's no-tutorial rule and the five-minute engagement bar are exactly
