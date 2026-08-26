@@ -1,20 +1,26 @@
 ## Breakthrough
 
-Running a scripted playthrough before ever opening the browser was the moment
-that paid off. The first corridor design was a small maze, and a greedy
-walker aimed at the door got stuck oscillating between two tiles forever --- a
-dead end that looked closer to the goal than the path that actually worked.
-That's exactly the trap a real player would hit with no instructions and no
-map to consult. Swapping it for a one-way corridor before writing a single
-test turned "does this feel fair" from a guess into something I'd already
-checked two ways: by script, and later by clicking through the battle myself,
-which is what caught flee doing nothing a player could see.
+The corridor version worked and passed every check, but sitting with the
+built thing, I could tell it wasn't answering the brief as well as it could:
+a straight line guarantees a shape, not a choice. Opening the map into a room
+with two ways in forced a real decision instead --- fight the weak enemies for
+a level first, or go straight for the door and skip the boss. The second
+breakthrough came from carrying an old fix forward without re-checking its
+assumptions: last week's flee fix retreated the player one tile west, which
+was only ever correct because a corridor can only be walked into from one
+side. The moment I actually traced how a player could now reach an enemy from
+any direction, that fix quietly became a bug again in a new shape. Neither of
+those showed up from reading the diff in isolation --- both needed thinking
+through what actually changes when a design assumption (one path in) stops
+holding.
 
 ## What this changed
 
-Testing a game's *rules* is not the same as testing whether it's *fun*, and I
-went in assuming a green test suite meant the game was in good shape. It
-doesn't: `attack()` was fully covered and correct, and the game still had a
-button that silently did nothing useful. The habit I want to keep is running
-the thing before trusting the tests that describe it --- treating a test suite
-as proof the rules are consistent, not proof the experience is right.
+I'd been treating "this passed the tests I wrote" as close to "this is
+right," and this week separated those further than the corridor week did.
+The flee bug wasn't caught by any test --- it was caught by walking through
+what a player entering from the south would experience, which the existing
+test suite had no opinion on because it was written for a world where that
+approach didn't exist. The habit I want to keep isn't just running the game
+before trusting its tests; it's re-examining what a passing test was actually
+assuming, whenever the thing underneath it changes shape.

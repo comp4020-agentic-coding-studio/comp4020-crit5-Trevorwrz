@@ -1,46 +1,62 @@
 # Process overview
 
-A tiny bump-combat corridor crawl: walk right, fight what's in the way, reach
-the door or run out of HP. No on-screen instructions anywhere --- the opening
-screen is just the corridor with the player at one end and the door glowing at
-the other.
+A tiny bump-combat dungeon room: explore, fight what's in the way, level up on
+what you beat, and find the door. No on-screen instructions anywhere --- the
+opening screen is just the room with the player in one corner and the door
+glowing in the other.
+
+This started the week as a straight corridor crawl. Partway through, playing
+the built game against what I actually wanted it to be, I decided the corridor
+was too thin an answer --- it didn't leave room for a real choice, and levelling
+had nothing to level *for*. The rewrite below is what replaced it: everything
+in it, including the map, the levelling system and the tests, is this week's
+work, built from scratch against this repo's own commit history, not carried
+in from anywhere else.
 
 ## The moments that mattered
 
-1. **A branching maze was the obvious first design, and it broke.** The
-   corridor started as a small maze (two enemies reachable from either of two
-   detours). I wrote a scripted playthrough --- a greedy walker that always
-   steps toward the door --- to sanity-check it before ever touching the DOM.
-   It got stuck: one dead-end tile looked closer to the door by straight-line
-   distance than the tile that actually led there, so the walker oscillated
-   forever between two squares. A first-time player with no instructions and
-   no map would hit the same trap. I replaced the maze with a single one-way
-   corridor before committing anything, so there's no earlier commit to point
-   at --- the fix is the design that shipped in
-   [`7b3136f`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-Trevorwrz/commit/7b3136f).
-2. **The ending rule got a test before the corridor got a second pass.**
-   [`ae9b0c7`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-Trevorwrz/commit/ae9b0c7)
-   asserts the spec's "a wrong move is possible, and play ends somewhere"
-   directly against the state machine (`spec/game.test.ts`): hp hitting zero
-   in a fight ends in a loss, reaching the clear door ends in a win, and the
-   corridor wall actually blocks a move. I also ran 300 scripted playthroughs
-   with an always-attack policy to check the odds weren't degenerate: every
-   run ended (no more stuck walkers), and about 4% lost --- real risk, not a
-   guaranteed win or a guaranteed loss.
-3. **Flee did nothing, and only clicking it showed that.** Reading
-   `flee()` looked fine: resolve a coin flip, maybe take a hit, close the
-   battle. Playing it was different --- on a clean getaway, the battle just
-   closed with the player standing exactly where they were, next to an enemy
-   that still blocked the only way through. The button did something (a state
-   change) but nothing a player could see or use. I changed a clean flee to
-   step the player back one tile in
-   [`5a466a0`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-Trevorwrz/commit/5a466a0)
-   --- the change the brief asks for: one that came from playing the finished
-   game, not from reading its code.
+1. **An open room needs a reason a straight line doesn't.** A single corridor
+   guarantees every fight happens; opening the map up risks a stranger walking
+   straight past everything interesting. I designed the room so a wall with
+   two gaps splits it in half --- landing on either gap puts you next to an
+   enemy, so at least one fight stays unavoidable, but the boss guarding the
+   far corner is reachable by a route that never touches it. That's a genuine
+   choice (grind the weak enemies for a level first, or go straight for the
+   door) rather than a maze to get lost in, in
+   [`090f56d`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-Trevorwrz/commit/090f56d).
+   Before trusting the layout I ran the same kind of check that caught last
+   week's dead end: a BFS over the map confirmed every floor tile is reachable
+   (no stray unreachable room), and 300 scripted playthroughs with a greedy,
+   always-attack walker ended every time --- zero stuck, about 89% wins and 11%
+   losses, so losing stayed a real risk instead of a rounding error.
+2. **The ending rule and the levelling system both got tests before either got
+   a second pass.**
+   [`38b57c7`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-Trevorwrz/commit/38b57c7)
+   reworks the spec's "a wrong move is possible, and play ends somewhere"
+   assertions onto the new room's coordinates, and adds coverage the old
+   corridor had no mechanic to test: killing an enemy grants exp, enough exp
+   levels the player up and heals them, and a higher level rolls higher damage
+   in the next fight --- levelling changes an outcome, not just a number on
+   screen.
+3. **Opening the map up quietly broke last week's flee fix.** The corridor's
+   fix made a clean flee retreat one tile west, which was correct precisely
+   because a one-way corridor could only ever be entered from the east.
+   Working through how a player can now reach any enemy from any of four
+   sides, west stopped being "back" --- walking into the room's lower-left
+   enemy from above and then fleeing would try to step into the border wall
+   and silently fail again, the exact bug the corridor fix was supposed to
+   have retired for good. The fix in
+   [`090f56d`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-Trevorwrz/commit/090f56d)
+   records the direction the player actually walked in from and retreats
+   along it instead of a fixed direction; the regression is pinned directly in
+   [`38b57c7`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-Trevorwrz/commit/38b57c7)
+   by approaching the same enemy from the side the old code would have gotten
+   wrong.
 
 ## What I haven't verified myself
 
 The brief's no-tutorial rule and the five-minute engagement bar are exactly
-the two things it says can't be put under test: I checked the openness of the
-opening screen and the odds by script, but a cold, silent playtest with
-another person is still owed before the crit.
+the two things it says can't be put under test: I checked the room's openness
+and the win/loss odds by script, and read through what a player clicking and
+walking would see, but a cold, silent playtest with another person is still
+owed before the crit.
