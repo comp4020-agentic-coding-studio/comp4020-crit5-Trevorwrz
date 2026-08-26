@@ -109,7 +109,15 @@ export function flee(state: GameState, rng: Rng = Math.random): GameState {
 
   const enemy = state.enemies[state.battle];
   const caught = rng() < 0.5;
-  if (!caught) return { ...state, battle: null };
+
+  if (!caught) {
+    // A clean getaway actually goes somewhere: back one tile, the way you
+    // came. Without this, fleeing was a no-op that just skipped a turn ---
+    // only obvious once you'd clicked it and watched nothing happen.
+    const back = { x: state.player.pos.x - 1, y: state.player.pos.y };
+    const player = tileAt(back.x, back.y) === WALL ? state.player : { ...state.player, pos: back };
+    return { ...state, player, battle: null };
+  }
 
   const hp = state.player.hp - enemy.atk;
   const player = { ...state.player, hp };
