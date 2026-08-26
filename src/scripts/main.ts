@@ -1,12 +1,9 @@
-import { MAP, attack, createInitialState, flee, move, type GameState } from "./game";
+import { MAP, createInitialState, move, type GameState } from "./game";
 
 const stage = document.getElementById("stage") as HTMLElement;
 const hpBar = document.getElementById("hp-bar") as HTMLElement;
 const levelBar = document.getElementById("level-bar") as HTMLElement;
-const battlePanel = document.getElementById("battle") as HTMLElement;
-const battleEnemy = document.getElementById("battle-enemy") as HTMLElement;
-const attackBtn = document.getElementById("attack-btn") as HTMLButtonElement;
-const fleeBtn = document.getElementById("flee-btn") as HTMLButtonElement;
+const logBar = document.getElementById("log") as HTMLElement;
 const endPanel = document.getElementById("end") as HTMLElement;
 const endMessage = document.getElementById("end-message") as HTMLElement;
 const restartBtn = document.getElementById("restart-btn") as HTMLButtonElement;
@@ -54,13 +51,7 @@ function render() {
   const expIntoLevel = state.player.exp % EXP_PER_LEVEL;
   levelBar.textContent = `Lv ${state.player.level} — ${expIntoLevel} / ${EXP_PER_LEVEL} exp`;
 
-  if (state.battle !== null) {
-    battlePanel.hidden = false;
-    const enemy = state.enemies[state.battle];
-    battleEnemy.textContent = `${Math.max(0, enemy.hp)} / ${enemy.maxHp}`;
-  } else {
-    battlePanel.hidden = true;
-  }
+  logBar.textContent = state.log ?? "";
 
   endPanel.hidden = state.status === "playing";
   if (state.status === "won") endMessage.textContent = "Through the door.";
@@ -80,8 +71,6 @@ stage.addEventListener("keydown", (e) => {
   apply(move(state, delta[0], delta[1]));
 });
 
-attackBtn.addEventListener("click", () => apply(attack(state)));
-fleeBtn.addEventListener("click", () => apply(flee(state)));
 restartBtn.addEventListener("click", () => apply(createInitialState()));
 
 render();

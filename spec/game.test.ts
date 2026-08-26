@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attack, createInitialState, flee, move, type GameState } from "../src/scripts/game";
+import { attack, createInitialState, move, type GameState } from "../src/scripts/game";
 
 // Crit 5 spec: "it can be lost: a wrong move is possible, and play ends
 // somewhere --- a win, a loss or a finish." These assert the ending rule
@@ -81,23 +81,38 @@ describe("crit 5 spec: levelling up changes the odds, not just a number", () => 
   });
 });
 
-// The corridor's flee fix (retreat one tile) assumed every fight was walked
-// into from the east, which was true of a one-way corridor and stopped being
-// true the moment the map opened up. This pins the fix that replaced it.
+// Bumping an enemy used to open a separate battle panel with its own
+// Attack/Flee buttons --- a click in the middle of otherwise keyboard-only
+// play. move() now resolves the whole fight synchronously, so there is never
+// a moment where state.battle is left non-null for the page to render.
 
-describe("crit 5 spec: fleeing retreats the way you actually came in", () => {
-  it("a clean flee steps back opposite the approach direction, not a fixed direction", () => {
+describe("crit 5 spec: walking into an enemy resolves the fight on the spot", () => {
+  it("bumping a weak enemy the player can beat clears it and steps onto its tile", () => {
     let state = createInitialState();
-    state = { ...state, player: { ...state.player, pos: { x: 1, y: 3 } } };
+    state = { ...state, player: { ...state.player, pos: { x: 3, y: 1 } } };
+    state.enemies = state.enemies.map((e) =>
+      e.pos.x === 4 && e.pos.y === 1 ? { ...e, hp: 1 } : e,
+    );
 
-    state = move(state, 0, 1); // walks down into the enemy sitting at (1,4)
-    expect(state.battle).not.toBeNull();
-    expect(state.player.pos).toEqual({ x: 1, y: 3 }); // not moved into the fight yet
-
-    const notCaught = () => 0.9;
-    state = flee(state, notCaught);
+    state = move(state, 1, 0, alwaysMinRoll); // bumps the weak enemy at (4,1)
 
     expect(state.battle).toBeNull();
-    expect(state.player.pos).toEqual({ x: 1, y: 2 }); // back the way it came: up, not west into a wall
+    expect(state.player.pos).toEqual({ x: 4, y: 1 }); // walked onto the cleared tile
+    expect(state.status).toBe("playing");
+    expect(state.log).toMatch(/defeated/i);
+  });
+
+  it("bumping a lethal enemy ends the run without moving the player onto its tile", () => {
+    let state = createInitialState();
+    state = { ...state, player: { ...state.player, pos: { x: 3, y: 1 }, hp: 1 } };
+    state.enemies = state.enemies.map((e) =>
+      e.pos.x === 4 && e.pos.y === 1 ? { ...e, hp: 99, atk: 5 } : e,
+    );
+
+    state = move(state, 1, 0, alwaysMinRoll); // bumps the now-lethal enemy at (4,1)
+
+    expect(state.status).toBe("lost");
+    expect(state.player.pos).toEqual({ x: 3, y: 1 }); // never stepped into the fight
+    expect(state.log).toMatch(/defeated/i);
   });
 });

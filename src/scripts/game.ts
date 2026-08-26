@@ -26,10 +26,10 @@ export interface GameState {
   status: Status;
   player: Player;
   enemies: Enemy[];
+  // Non-null only while resolveBattle() is mid-loop --- move() always
+  // returns with this back at null. Kept so attack() has something to read.
   battle: number | null;
-  // The step that walked the player into this fight, so a clean flee has a
-  // "back" that means something on an open map --- see PROCESS.md.
-  approach: Pos | null;
+  log: string | null;
 }
 
 const WALL = "#";
@@ -76,7 +76,7 @@ export function createInitialState(): GameState {
     player: { pos: findChar("P"), hp: 6, maxHp: 6, level: 1, exp: 0 },
     enemies: [...weak, ...boss],
     battle: null,
-    approach: null,
+    log: null,
   };
 }
 
@@ -88,25 +88,50 @@ function livingEnemyAt(state: GameState, x: number, y: number): number {
   return state.enemies.findIndex((e) => e.hp > 0 && e.pos.x === x && e.pos.y === y);
 }
 
-export function move(state: GameState, dx: number, dy: number): GameState {
-  if (state.status !== "playing" || state.battle !== null) return state;
+export type Rng = () => number;
+
+// Bumping an enemy resolves the whole fight on the spot --- no attack button
+// to click, no switching from keyboard to mouse and back mid-move. See
+// PROCESS.md: this replaced a manual attack/flee panel after actually
+// playing it felt like two separate interfaces glued together.
+export function move(state: GameState, dx: number, dy: number, rng: Rng = Math.random): GameState {
+  if (state.status !== "playing") return state;
 
   const x = state.player.pos.x + dx;
   const y = state.player.pos.y + dy;
-  if (tileAt(x, y) === WALL) return state;
+  if (tileAt(x, y) === WALL) return { ...state, log: null };
 
   const enemyIndex = livingEnemyAt(state, x, y);
-  if (enemyIndex !== -1) return { ...state, battle: enemyIndex, approach: { x: dx, y: dy } };
+  if (enemyIndex !== -1) {
+    const enemy = state.enemies[enemyIndex];
+    const hpBefore = state.player.hp;
+    const resolved = resolveBattle({ ...state, battle: enemyIndex, log: null }, rng);
+
+    if (resolved.status === "lost") return { ...resolved, log: "You were defeated." };
+
+    const hpLost = hpBefore - resolved.player.hp;
+    const name = enemy.maxHp > 3 ? "the boss" : "a rat";
+    const log = hpLost > 0 ? `Defeated ${name} (-${hpLost} HP).` : `Defeated ${name}.`;
+    const player = { ...resolved.player, pos: { x, y } };
+    const status: Status = tileAt(x, y) === EXIT ? "won" : resolved.status;
+    return { ...resolved, player, status, log };
+  }
 
   const player = { ...state.player, pos: { x, y } };
   const status: Status = tileAt(x, y) === EXIT ? "won" : state.status;
-  return { ...state, player, status };
+  return { ...state, player, status, log: null };
 }
-
-export type Rng = () => number;
 
 function roll(rng: Rng, min: number, max: number): number {
   return min + Math.floor(rng() * (max - min + 1));
+}
+
+function resolveBattle(state: GameState, rng: Rng): GameState {
+  let s = state;
+  while (s.battle !== null && s.status === "playing") {
+    s = attack(s, rng);
+  }
+  return s;
 }
 
 // A level is worth something concrete: the roll a fight is decided on shifts
@@ -128,35 +153,11 @@ export function attack(state: GameState, rng: Rng = Math.random): GameState {
 
   if (enemy.hp <= 0) {
     const player = gainExp(state.player, enemy.exp);
-    return { ...state, enemies, player, battle: null, approach: null };
+    return { ...state, enemies, player, battle: null };
   }
 
   const hp = state.player.hp - roll(rng, enemy.atk, enemy.atk + 1);
   const player = { ...state.player, hp };
   const status: Status = hp <= 0 ? "lost" : state.status;
   return { ...state, enemies, player, status };
-}
-
-export function flee(state: GameState, rng: Rng = Math.random): GameState {
-  if (state.battle === null || state.status !== "playing") return state;
-
-  const enemy = state.enemies[state.battle];
-  const caught = rng() < 0.5;
-
-  if (!caught) {
-    // A clean getaway steps back the way the player actually came in, using
-    // the approach direction recorded when the fight started --- not a
-    // hardcoded "west", which is all the old one-way corridor ever needed
-    // and which sends you into a wall on an open map you can enter a fight
-    // from any side of. See PROCESS.md.
-    const approach = state.approach ?? { x: 1, y: 0 };
-    const back = { x: state.player.pos.x - approach.x, y: state.player.pos.y - approach.y };
-    const player = tileAt(back.x, back.y) === WALL ? state.player : { ...state.player, pos: back };
-    return { ...state, player, battle: null, approach: null };
-  }
-
-  const hp = state.player.hp - enemy.atk;
-  const player = { ...state.player, hp };
-  const status: Status = hp <= 0 ? "lost" : state.status;
-  return { ...state, player, battle: null, approach: null, status };
 }
